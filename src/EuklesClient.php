@@ -1,0 +1,277 @@
+<?php
+
+namespace CatLab\Eukles\Client;
+
+/**
+ * Class EuklesClient
+ * @package CatLab\Eukles\Client
+ */
+class EuklesClient
+{
+    const QUERY_NONCE = 'nonce';
+
+    const HEADER_SIGNATURE = 'eukles-signature';
+    const HEADER_KEY = 'eukles-project-key';
+
+    /**
+     * @var string
+     */
+    protected $algorithm = 'sha256';
+
+    /**
+     * @var ClientInterface
+     */
+    protected $httpClient;
+
+    /**
+     * @var string
+     */
+    protected $server;
+
+    /**
+     * @var string
+     */
+    protected $front;
+
+    /**
+     * @var string
+     */
+    protected $consumerKey;
+
+    /**
+     * @var string
+     */
+    protected $consumerSecret;
+
+    /**
+     * @var string
+     */
+    protected $version;
+
+    /**
+     * @return self
+     */
+    public static function fromConfig()
+    {
+        $client = new self(
+            \Config::get('eukles.server'),
+            \Config::get('eukles.key'),
+            \Config::get('eukles.secret'),
+            \Config::get('eukles.version')
+        );
+
+        if (!empty(\Config::get('centralStorage.front'))) {
+            $client->setFrontUrl(\Config::get('centralStorage.front'));
+        }
+
+        return $client;
+    }
+
+    /**
+     * CentralStorageClient constructor.
+     * @param null $server
+     * @param null $consumerKey
+     * @param null $consumerSecret
+     * @param ClientInterface|null $httpClient
+     * @param string $version
+     */
+    public function __construct(
+        $server = null,
+        $consumerKey = null,
+        $consumerSecret = null,
+        ClientInterface $httpClient = null
+    ) {
+        if (!isset($httpClient)) {
+            $httpClient = new GuzzleClient();
+        }
+        $this->httpClient = $httpClient;
+
+        $this->server = $server;
+        $this->consumerKey = $consumerKey;
+        $this->consumerSecret = $consumerSecret;
+    }
+
+    /**
+     * Sign a request.
+     * @param Request $request
+     * @param $key
+     * @param $secret
+     * @return void
+     */
+    public function sign(Request $request, $key = null, $secret = null)
+    {
+        $key = $key ?? $this->consumerKey;
+        $secret = $secret ?? $this->consumerSecret;
+
+        // Add a nonce that we won't check but we add it anyway.
+        $request->query->set(self::QUERY_NONCE, $this->getNonce());
+
+        $signature = $this->getSignature($request, $this->algorithm, $secret);
+
+        $request->headers->set(self::HEADER_SIGNATURE, $signature);
+        $request->headers->set(self::HEADER_KEY, $key);
+    }
+
+    /**
+     * Check if a request is valid.
+     * @param Request $request
+     * @param $key
+     * @param $secret
+     * @return bool
+     */
+    public function isValid(Request $request, $key, $secret)
+    {
+        $fullSignature = $request->headers->get(self::HEADER_SIGNATURE);
+        if (!$fullSignature) {
+            return false;
+        }
+
+        $signatureParts = explode(':', $fullSignature);
+        if (count($signatureParts) != 3) {
+            return false;
+        }
+
+        $algorithm = array_shift($signatureParts);
+        $salt = array_shift($signatureParts);
+        $signature = array_shift($signatureParts);
+
+        $actualSignature = $this->getSignature($request, $algorithm, $secret, $salt);
+        if (!$actualSignature) {
+            return false;
+        }
+
+        return $fullSignature === $actualSignature;
+    }
+
+    /**
+     * @param Request $request
+     * @param $algorithm
+     * @param $secret
+     * @param null $salt
+     * @return string
+     */
+    protected function getSignature(Request $request, $algorithm, $secret, $salt = null)
+    {
+        if (!$this->isValidAlgorithm($algorithm)) {
+            return false;
+        }
+
+        $inputs = $request->query();
+
+        // Add some salt
+        if (!isset($salt)) {
+            $salt = str_random(16);
+        }
+
+        $inputs['salt'] = $salt;
+        $inputs['secret'] = $secret;
+
+        // Sort on key
+        ksort($inputs);
+
+        // Turn into a string
+        $base = http_build_query($inputs);
+
+        // And... hash!
+        $signature = hash($algorithm, $base);
+
+        return $algorithm . ':' . $inputs['salt'] . ':' . $signature;
+    }
+
+    /**
+     * @param string $algorithm
+     * @return bool
+     */
+    protected function isValidAlgorithm($algorithm)
+    {
+        switch ($algorithm) {
+            case 'sha256':
+            case 'sha384':
+            case 'sha512':
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    /**
+     * @return false|string
+     */
+    protected function getNonce()
+    {
+        $t = microtime(true);
+        $micro = sprintf("%06d",($t - floor($t)) * 1000000);
+        $d = new \DateTime( date('Y-m-d H:i:s.'.$micro, $t) );
+
+        return $d->format("Y-m-d H:i:s.u");
+    }
+
+    /**
+     * @param $path
+     * @param null $server
+     * @return string
+     */
+    protected function getUrl($path, $server = null)
+    {
+        $server = $server ?? $this->server;
+        return $server . '/api/v1/' . $path;
+    }
+
+    /**
+     * @param Request $request
+     * @return \Psr\Http\Message\ResponseInterface
+     */
+    protected function send(Request $request)
+    {
+        $method = $request->getMethod();
+        $url = $request->getUri();
+
+        $options = [
+            'headers' => $request->headers->all(),
+            'query' => $request->query->all()
+        ];
+
+        if ($request->files->count() > 0) {
+
+            $elements = [];
+            foreach ($request->input() as $k => $v) {
+                if (is_scalar($v)) {
+                    $elements[] = [
+                        'name' => $k,
+                        'contents' => $v
+                    ];
+                }
+            }
+
+            $counter = 0;
+            foreach ($request->files as $file) {
+
+                /** @var UploadedFile $file */
+                $filename = addslashes($file->getClientOriginalName());
+
+                if (empty($filename)) {
+                    $filename = $file->getFilename();
+                }
+
+                $elements[] = [
+                    'name' => 'file_' . (++ $counter),
+                    'contents' => fopen($file->path(), 'r'),
+                    'filename' => $file->path(),
+                    'headers' => [
+                        'Content-Disposition' => 'form-data; name="file_' . (++ $counter) . '"; filename="' . $filename . '"'
+                    ]
+                ];
+            }
+
+            $options['multipart'] = $elements;
+        } elseif ($request->input) {
+            $options['json'] = $request->input->all();
+        }
+
+        //dd($psr7Request)
+        $response = $this->httpClient->request($method, $url, $options);
+
+        return $response;
+    }
+}
