@@ -5,12 +5,16 @@ namespace CatLab\Eukles\Client;
 use CatLab\CentralStorage\Client\Exceptions\StorageServerException;
 use CatLab\CentralStorage\Client\Interfaces\CentralStorageClient as CentralStorageClientInterface;
 use CatLab\CentralStorage\Client\Models\Asset;
+use CatLab\Eukles\Client\Exceptions\EuklesServerException;
+use CatLab\Eukles\Client\Exceptions\InvalidModel;
+use CatLab\Eukles\Client\Interfaces\EuklesModel;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Symfony\Component\HttpFoundation\File\File;
+use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
  * Class EuklesClient
@@ -18,10 +22,11 @@ use Symfony\Component\HttpFoundation\File\File;
  */
 class EuklesClient
 {
-    const QUERY_NONCE = 'nonce';
+    const QUERY_NONCE       = 'nonce';
 
-    const HEADER_SIGNATURE = 'eukles-signature';
-    const HEADER_KEY = 'eukles-project-key';
+    const HEADER_SIGNATURE  = 'eukles-signature';
+    const HEADER_KEY        = 'eukles-project-key';
+    const ENVIRONMENT_KEY   = 'eukles-environment';
 
     /**
      * @var string
@@ -41,11 +46,6 @@ class EuklesClient
     /**
      * @var string
      */
-    protected $front;
-
-    /**
-     * @var string
-     */
     protected $consumerKey;
 
     /**
@@ -56,7 +56,7 @@ class EuklesClient
     /**
      * @var string
      */
-    protected $version;
+    protected $environment;
 
     /**
      * @return self
@@ -67,12 +67,8 @@ class EuklesClient
             \Config::get('eukles.server'),
             \Config::get('eukles.key'),
             \Config::get('eukles.secret'),
-            \Config::get('eukles.version')
+            \Config::get('eukles.environment')
         );
-
-        if (!empty(\Config::get('centralStorage.front'))) {
-            $client->setFrontUrl(\Config::get('centralStorage.front'));
-        }
 
         return $client;
     }
@@ -82,13 +78,14 @@ class EuklesClient
      * @param null $server
      * @param null $consumerKey
      * @param null $consumerSecret
+     * @param null $environment
      * @param ClientInterface|null $httpClient
-     * @param string $version
      */
     public function __construct(
         $server = null,
         $consumerKey = null,
         $consumerSecret = null,
+        $environment = null,
         ClientInterface $httpClient = null
     ) {
         if (!isset($httpClient)) {
@@ -99,6 +96,7 @@ class EuklesClient
         $this->server = $server;
         $this->consumerKey = $consumerKey;
         $this->consumerSecret = $consumerSecret;
+        $this->environment = $environment;
     }
 
     /**
@@ -151,6 +149,94 @@ class EuklesClient
         }
 
         return $fullSignature === $actualSignature;
+    }
+
+    /**
+     * @param $eventType
+     * @param $objects
+     * @throws EuklesServerException
+     */
+    public function trackEvent($eventType, $objects)
+    {
+        $translatedObjects = [];
+        foreach ($objects as $role => $object) {
+            // check what kind of array this is
+            if (is_array($object) && isset($object['type'])) {
+                $translatedObjects[] = $this->translateObject($role, $object);
+            } else {
+                // need to go deeper.
+                foreach ($object as $v) {
+                    $translatedObjects[] = $this->translateObject($role, $v);
+                }
+            }
+        }
+
+        $data = [
+            'type' => $eventType,
+            'data' => [
+                'items' => $translatedObjects
+            ]
+        ];
+
+        $url = $this->getUrl('events.json');
+        $request = Request::create($url, 'POST');
+        $request->headers->replace([
+            'Content-Type' => 'application/json'
+        ]);
+
+        $request->input = new ParameterBag($data);
+
+        $this->sign($request);
+
+        try {
+            $result = $this->send($request);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+    }
+
+    /**
+     * @param $role
+     * @param $object
+     * @return array
+     * @throws InvalidModel
+     */
+    protected function translateObject($role, $object)
+    {
+        if ($object instanceof EuklesModel) {
+            return [
+                'uid' => $object->getEuklesId(),
+                'role' => $role,
+                'type' => $object->getEuklesType(),
+                'attributes' => $object->getEuklesAttributes()
+            ];
+        } elseif (
+            is_object($object) ||
+            is_array($object)
+        ) {
+            $parameters = is_object($object) ? get_object_vars($object) : $object;
+            if (!isset($parameters['type'])) {
+                throw InvalidModel::make($parameters);
+            }
+
+            $params = [
+                'role' => $role
+            ];
+
+            $params['attributes'] = $parameters;
+            $params['type'] = $parameters['type'];
+
+            unset($params['attributes']['type']);
+
+            if (isset($parameters['uid'])) {
+                $params['uid'] = $parameters['uid'];
+                unset($params['attributes']['uid']);
+            }
+
+            return $params;
+        }
+
+        throw InvalidModel::make($object);
     }
 
     /**
