@@ -8,6 +8,7 @@ use CatLab\CentralStorage\Client\Models\Asset;
 use CatLab\Eukles\Client\Exceptions\EuklesServerException;
 use CatLab\Eukles\Client\Exceptions\InvalidModel;
 use CatLab\Eukles\Client\Interfaces\EuklesModel;
+use CatLab\Eukles\Client\Models\Event;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
@@ -152,31 +153,13 @@ class EuklesClient
     }
 
     /**
-     * @param $eventType
-     * @param $objects
+     * @param Event $event
      * @throws EuklesServerException
+     * @throws InvalidModel
      */
-    public function trackEvent($eventType, $objects)
+    public function trackEvent(Event $event)
     {
-        $translatedObjects = [];
-        foreach ($objects as $role => $object) {
-            // check what kind of array this is
-            if (is_array($object) && isset($object['type'])) {
-                $translatedObjects[] = $this->translateObject($role, $object);
-            } else {
-                // need to go deeper.
-                foreach ($object as $v) {
-                    $translatedObjects[] = $this->translateObject($role, $v);
-                }
-            }
-        }
-
-        $data = [
-            'type' => $eventType,
-            'data' => [
-                'items' => $translatedObjects
-            ]
-        ];
+        $data = $event->getData();
 
         $url = $this->getUrl('events.json');
         $request = Request::create($url, 'POST');
@@ -193,50 +176,6 @@ class EuklesClient
         } catch (RequestException $e) {
             throw EuklesServerException::make($e);
         }
-    }
-
-    /**
-     * @param $role
-     * @param $object
-     * @return array
-     * @throws InvalidModel
-     */
-    protected function translateObject($role, $object)
-    {
-        if ($object instanceof EuklesModel) {
-            return [
-                'uid' => $object->getEuklesId(),
-                'role' => $role,
-                'type' => $object->getEuklesType(),
-                'attributes' => $object->getEuklesAttributes()
-            ];
-        } elseif (
-            is_object($object) ||
-            is_array($object)
-        ) {
-            $parameters = is_object($object) ? get_object_vars($object) : $object;
-            if (!isset($parameters['type'])) {
-                throw InvalidModel::make($parameters);
-            }
-
-            $params = [
-                'role' => $role
-            ];
-
-            $params['attributes'] = $parameters;
-            $params['type'] = $parameters['type'];
-
-            unset($params['attributes']['type']);
-
-            if (isset($parameters['uid'])) {
-                $params['uid'] = $parameters['uid'];
-                unset($params['attributes']['uid']);
-            }
-
-            return $params;
-        }
-
-        throw InvalidModel::make($object);
     }
 
     /**
