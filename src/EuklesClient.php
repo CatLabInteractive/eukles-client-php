@@ -179,6 +179,16 @@ class EuklesClient
     }
 
     /**
+     * @param $eventType
+     * @param null $objects
+     * @return Event
+     */
+    public function createEvent($eventType, $objects = null)
+    {
+        return Event::create($eventType, $objects);
+    }
+
+    /**
      * @param Request $request
      * @param $algorithm
      * @param $secret

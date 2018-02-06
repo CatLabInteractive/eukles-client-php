@@ -15,10 +15,13 @@ class Event
      * @param $objects
      * @return Event
      */
-    public static function create($type, $objects)
+    public static function create($type, $objects = null)
     {
         $instance = new self($type);
-        $instance->objects = $objects;
+
+        if ($objects === null) {
+            $instance->objects = $objects;
+        }
 
         return $instance;
     }
