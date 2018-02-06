@@ -19,7 +19,7 @@ class Event
     {
         $instance = new self($type);
 
-        if ($objects === null) {
+        if ($objects !== null) {
             $instance->objects = $objects;
         }
 
@@ -99,7 +99,7 @@ class Event
         $translatedObjects = [];
         foreach ($this->objects as $role => $object) {
             // check what kind of array this is
-            if (is_array($object) && isset($object['type'])) {
+            if (is_object($object) || is_array($object) && isset($object['type'])) {
                 $translatedObjects[] = $this->translateObject($role, $object);
             } else {
                 // need to go deeper.
