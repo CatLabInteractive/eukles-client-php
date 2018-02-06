@@ -11,6 +11,19 @@ use CatLab\Eukles\Client\Interfaces\EuklesModel;
 class Event
 {
     /**
+     * @param $type
+     * @param $objects
+     * @return Event
+     */
+    public static function create($type, $objects)
+    {
+        $instance = new self($type);
+        $instance->objects = $objects;
+
+        return $instance;
+    }
+
+    /**
      * @var string
      */
     protected $type;
@@ -39,7 +52,7 @@ class Event
      * @param mixed $object
      * @return $this
      */
-    public function addModel($role, $object)
+    public function setObject($role, $object)
     {
         if (!isset($this->objects[$role])) {
             $this->objects[$role] = [];
@@ -50,26 +63,26 @@ class Event
     }
 
     /**
-     * @param $relationship
      * @param $a
+     * @param $relationship
      * @param $b
      * @return $this
      * @throws InvalidModel
      */
-    public function addLink($relationship, $a, $b)
+    public function link($a, $relationship, $b)
     {
         $this->actions[] = $this->getLinkAction('link', $relationship, $a, $b);
         return $this;
     }
 
     /**
-     * @param $relationship
      * @param $a
+     * @param $relationship
      * @param $b
      * @return $this
      * @throws InvalidModel
      */
-    public function removeLink($relationship, $a, $b)
+    public function unlink($a, $relationship, $b)
     {
         $this->actions[] = $this->getLinkAction('unlink', $relationship, $a, $b);
         return $this;
@@ -99,7 +112,7 @@ class Event
                 'items' => $translatedObjects
             ],
             'actions' => [
-                'items' => $this->links
+                'items' => $this->actions
             ]
         ];
     }
