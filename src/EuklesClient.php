@@ -213,7 +213,7 @@ class EuklesClient
     public function syncRelationship($model, $relationship, $targets)
     {
         $previousProtectState = $this->protectEuklesNamespace;
-        //$this->protectEuklesNamespace = false;
+        $this->protectEuklesNamespace = false;
 
         try {
             $event = self::createEvent('eukles.sync.' . $relationship);
