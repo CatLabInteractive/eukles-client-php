@@ -213,7 +213,7 @@ class EuklesClient
     public function syncRelationship($model, $relationship, $targets)
     {
         $previousProtectState = $this->protectEuklesNamespace;
-        $this->protectEuklesNamespace = false;
+        //$this->protectEuklesNamespace = false;
 
         try {
             $event = self::createEvent('eukles.sync.' . $relationship);
@@ -373,7 +373,8 @@ class EuklesClient
 
         $name = $event->getType();
         $ns = self::EUKLES_NAMESPACE . '.';
-        if (mb_substr(mb_strtoupper($name), 0, mb_strlen($ns)) === $ns) {
+
+        if (mb_substr(mb_strtoupper($name), 0, mb_strlen($ns)) === mb_strtoupper($ns)) {
             throw new EuklesNamespaceException("Event namespaces should not start with " . self::EUKLES_NAMESPACE);
         }
     }
