@@ -5,6 +5,7 @@ namespace CatLab\Eukles\Client;
 use CatLab\CentralStorage\Client\Exceptions\StorageServerException;
 use CatLab\CentralStorage\Client\Interfaces\CentralStorageClient as CentralStorageClientInterface;
 use CatLab\CentralStorage\Client\Models\Asset;
+use CatLab\Eukles\Client\Exceptions\EuklesNamespaceException;
 use CatLab\Eukles\Client\Exceptions\EuklesServerException;
 use CatLab\Eukles\Client\Exceptions\InvalidModel;
 use CatLab\Eukles\Client\Interfaces\EuklesModel;
@@ -28,6 +29,8 @@ class EuklesClient
     const HEADER_SIGNATURE  = 'eukles-signature';
     const HEADER_KEY        = 'eukles-project-key';
     const ENVIRONMENT_KEY   = 'eukles-environment';
+
+    const EUKLES_NAMESPACE = 'eukles';
 
     /**
      * @var string
@@ -58,6 +61,11 @@ class EuklesClient
      * @var string
      */
     protected $environment;
+
+    /**
+     * @var bool
+     */
+    private $protectEuklesNamespace = true;
 
     /**
      * @return self
@@ -156,9 +164,12 @@ class EuklesClient
      * @param Event $event
      * @throws EuklesServerException
      * @throws InvalidModel
+     * @throws EuklesNamespaceException
      */
     public function trackEvent(Event $event)
     {
+        $this->checkValidNamespace($event);
+
         $data = $event->getData();
 
         $url = $this->getUrl('events.json');
@@ -168,6 +179,7 @@ class EuklesClient
         ]);
 
         $request->input = new ParameterBag($data);
+        $request->input->set('environment', $this->environment);
 
         $this->sign($request);
 
@@ -186,6 +198,34 @@ class EuklesClient
     public function createEvent($eventType, $objects = null)
     {
         return Event::create($eventType, $objects);
+    }
+
+    /**
+     * Synchronize the relationship of an object.
+     * Note that any existing relationships from model with type $relatonship will be
+     * removed if not available in the $targets array.
+     * Note that sync events do not trigger actions.
+     * @param $model
+     * @param $relationship
+     * @param $targets
+     * @throws \Exception
+     */
+    public function syncRelationship($model, $relationship, $targets)
+    {
+        $previousProtectState = $this->protectEuklesNamespace;
+        $this->protectEuklesNamespace = false;
+
+        try {
+            $event = self::createEvent('eukles.sync.' . $relationship);
+            $event->setObject('source', $model);
+            foreach ($targets as $target) {
+                $event->setObject('link', $target);
+            }
+            $this->trackEvent($event);
+        } catch (\Exception $e) {
+            $this->protectEuklesNamespace = $previousProtectState;
+            throw $e;
+        }
     }
 
     /**
@@ -318,5 +358,23 @@ class EuklesClient
         $response = $this->httpClient->request($method, $url, $options);
 
         return $response;
+    }
+
+    /**
+     * Check if the event namespace is valid.
+     * @param $event
+     * @throws EuklesNamespaceException
+     */
+    protected function checkValidNamespace($event)
+    {
+        if (!$this->protectEuklesNamespace) {
+            return;
+        }
+
+        $name = $event->type;
+        $ns = self::EUKLES_NAMESPACE . '.';
+        if (mb_substr(mb_strtoupper($name), 0, mb_strlen($ns)) === $ns) {
+            throw new EuklesNamespaceException("Event namespaces should not start with " . self::EUKLES_NAMESPACE);
+        }
     }
 }
