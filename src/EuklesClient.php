@@ -365,13 +365,13 @@ class EuklesClient
      * @param $event
      * @throws EuklesNamespaceException
      */
-    protected function checkValidNamespace($event)
+    protected function checkValidNamespace(Event $event)
     {
         if (!$this->protectEuklesNamespace) {
             return;
         }
 
-        $name = $event->type;
+        $name = $event->getType();
         $ns = self::EUKLES_NAMESPACE . '.';
         if (mb_substr(mb_strtoupper($name), 0, mb_strlen($ns)) === $ns) {
             throw new EuklesNamespaceException("Event namespaces should not start with " . self::EUKLES_NAMESPACE);

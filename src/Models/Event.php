@@ -92,6 +92,14 @@ class Event
     }
 
     /**
+     * @return string
+     */
+    public function getType(): string
+    {
+        return $this->type;
+    }
+
+    /**
      * @throws InvalidModel
      */
     public function getData()
