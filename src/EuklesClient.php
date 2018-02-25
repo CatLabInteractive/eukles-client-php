@@ -260,7 +260,7 @@ class EuklesClient
     protected function getUrl($path, $server = null)
     {
         $server = $server ?? $this->server;
-        return $server . '/api/v1/' . $path;
+        return $server . '/api/v1/tracking/' . $path;
     }
 
     /**
