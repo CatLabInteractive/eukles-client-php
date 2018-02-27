@@ -201,6 +201,37 @@ class EuklesClient
     }
 
     /**
+     * @param $modelType
+     * @param $modelUid
+     * @return mixed
+     * @throws EuklesServerException
+     */
+    public function getOptIns($modelType, $modelUid)
+    {
+        $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
+        $request = Request::create($url, 'GET');
+        $request->headers->replace([
+            'Content-Type' => 'application/json'
+        ]);
+
+        $request->query = new ParameterBag([]);
+        $request->query->set('environment', $this->environment);
+
+        $this->sign($request);
+
+        try {
+            $result = $this->send($request);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+
+        $jsonContent = $result->getBody()->getContents();
+
+        echo $jsonContent;
+        return json_decode($jsonContent, true);
+    }
+
+    /**
      * Synchronize the relationship of an object.
      * Note that any existing relationships from model with type $relatonship will be
      * removed if not available in the $targets array.
