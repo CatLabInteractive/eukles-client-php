@@ -8,11 +8,11 @@ use GuzzleHttp\Exception\RequestException;
  * Class EuklesServerException
  * @package CatLab\Eukles\Client\Exceptions
  */
-class EuklesServerException extends CentralStorageException
+class EuklesServerException extends EuklesException
 {
     /**
      * @param RequestException $e
-     * @return StorageServerException
+     * @return EuklesServerException
      */
     public static function make(RequestException $e)
     {
