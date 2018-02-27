@@ -5,12 +5,18 @@ namespace CatLab\Eukles\Client;
 use CatLab\CentralStorage\Client\Exceptions\StorageServerException;
 use CatLab\CentralStorage\Client\Interfaces\CentralStorageClient as CentralStorageClientInterface;
 use CatLab\CentralStorage\Client\Models\Asset;
+use CatLab\Eukles\Client\Exceptions\EuklesNamespaceException;
+use CatLab\Eukles\Client\Exceptions\EuklesServerException;
+use CatLab\Eukles\Client\Exceptions\InvalidModel;
+use CatLab\Eukles\Client\Interfaces\EuklesModel;
+use CatLab\Eukles\Client\Models\Event;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Http\UploadedFile;
 use Symfony\Component\HttpFoundation\File\File;
+use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
  * Class EuklesClient
@@ -18,10 +24,13 @@ use Symfony\Component\HttpFoundation\File\File;
  */
 class EuklesClient
 {
-    const QUERY_NONCE = 'nonce';
+    const QUERY_NONCE       = 'nonce';
 
-    const HEADER_SIGNATURE = 'eukles-signature';
-    const HEADER_KEY = 'eukles-project-key';
+    const HEADER_SIGNATURE  = 'eukles-signature';
+    const HEADER_KEY        = 'eukles-project-key';
+    const ENVIRONMENT_KEY   = 'eukles-environment';
+
+    const EUKLES_NAMESPACE = 'eukles';
 
     /**
      * @var string
@@ -41,11 +50,6 @@ class EuklesClient
     /**
      * @var string
      */
-    protected $front;
-
-    /**
-     * @var string
-     */
     protected $consumerKey;
 
     /**
@@ -56,7 +60,12 @@ class EuklesClient
     /**
      * @var string
      */
-    protected $version;
+    protected $environment;
+
+    /**
+     * @var bool
+     */
+    private $protectEuklesNamespace = true;
 
     /**
      * @return self
@@ -67,12 +76,8 @@ class EuklesClient
             \Config::get('eukles.server'),
             \Config::get('eukles.key'),
             \Config::get('eukles.secret'),
-            \Config::get('eukles.version')
+            \Config::get('eukles.environment')
         );
-
-        if (!empty(\Config::get('centralStorage.front'))) {
-            $client->setFrontUrl(\Config::get('centralStorage.front'));
-        }
 
         return $client;
     }
@@ -82,13 +87,14 @@ class EuklesClient
      * @param null $server
      * @param null $consumerKey
      * @param null $consumerSecret
+     * @param null $environment
      * @param ClientInterface|null $httpClient
-     * @param string $version
      */
     public function __construct(
         $server = null,
         $consumerKey = null,
         $consumerSecret = null,
+        $environment = null,
         ClientInterface $httpClient = null
     ) {
         if (!isset($httpClient)) {
@@ -99,6 +105,7 @@ class EuklesClient
         $this->server = $server;
         $this->consumerKey = $consumerKey;
         $this->consumerSecret = $consumerSecret;
+        $this->environment = $environment;
     }
 
     /**
@@ -151,6 +158,102 @@ class EuklesClient
         }
 
         return $fullSignature === $actualSignature;
+    }
+
+    /**
+     * @param Event $event
+     * @throws EuklesServerException
+     * @throws InvalidModel
+     * @throws EuklesNamespaceException
+     */
+    public function trackEvent(Event $event)
+    {
+        $this->checkValidNamespace($event);
+
+        $data = $event->getData();
+
+        $url = $this->getUrl('events.json');
+        $request = Request::create($url, 'POST');
+        $request->headers->replace([
+            'Content-Type' => 'application/json'
+        ]);
+
+        $request->input = new ParameterBag($data);
+        $request->input->set('environment', $this->environment);
+
+        $this->sign($request);
+
+        try {
+            $result = $this->send($request);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+    }
+
+    /**
+     * @param $eventType
+     * @param null $objects
+     * @return Event
+     */
+    public function createEvent($eventType, $objects = null)
+    {
+        return Event::create($eventType, $objects);
+    }
+
+    /**
+     * @param $modelType
+     * @param $modelUid
+     * @throws EuklesServerException
+     */
+    public function getOptIns($modelType, $modelUid)
+    {
+        $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
+        $request = Request::create($url, 'GET');
+        $request->headers->replace([
+            'Content-Type' => 'application/json'
+        ]);
+
+        $request->query = new ParameterBag([]);
+        $request->query->set('environment', $this->environment);
+
+        $this->sign($request);
+
+        try {
+            $result = $this->send($request);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+
+        $jsonContent = $result->getBody()->getContents();
+        return json_decode($jsonContent, true);
+    }
+
+    /**
+     * Synchronize the relationship of an object.
+     * Note that any existing relationships from model with type $relatonship will be
+     * removed if not available in the $targets array.
+     * Note that sync events do not trigger actions.
+     * @param $model
+     * @param $relationship
+     * @param $targets
+     * @throws \Exception
+     */
+    public function syncRelationship($model, $relationship, $targets)
+    {
+        $previousProtectState = $this->protectEuklesNamespace;
+        $this->protectEuklesNamespace = false;
+
+        try {
+            $event = self::createEvent('eukles.sync.' . $relationship);
+            $event->setObject('source', $model);
+            foreach ($targets as $target) {
+                $event->setObject('link', $target);
+            }
+            $this->trackEvent($event);
+        } catch (\Exception $e) {
+            $this->protectEuklesNamespace = $previousProtectState;
+            throw $e;
+        }
     }
 
     /**
@@ -225,7 +328,7 @@ class EuklesClient
     protected function getUrl($path, $server = null)
     {
         $server = $server ?? $this->server;
-        return $server . '/api/v1/' . $path;
+        return $server . '/api/v1/tracking/' . $path;
     }
 
     /**
@@ -283,5 +386,24 @@ class EuklesClient
         $response = $this->httpClient->request($method, $url, $options);
 
         return $response;
+    }
+
+    /**
+     * Check if the event namespace is valid.
+     * @param $event
+     * @throws EuklesNamespaceException
+     */
+    protected function checkValidNamespace(Event $event)
+    {
+        if (!$this->protectEuklesNamespace) {
+            return;
+        }
+
+        $name = $event->getType();
+        $ns = self::EUKLES_NAMESPACE . '.';
+
+        if (mb_substr(mb_strtoupper($name), 0, mb_strlen($ns)) === mb_strtoupper($ns)) {
+            throw new EuklesNamespaceException("Event namespaces should not start with " . self::EUKLES_NAMESPACE);
+        }
     }
 }
