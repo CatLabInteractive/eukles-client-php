@@ -5,11 +5,13 @@ namespace CatLab\Eukles\Client;
 use CatLab\CentralStorage\Client\Exceptions\StorageServerException;
 use CatLab\CentralStorage\Client\Interfaces\CentralStorageClient as CentralStorageClientInterface;
 use CatLab\CentralStorage\Client\Models\Asset;
+use CatLab\Eukles\Client\Collections\OptInCollection;
 use CatLab\Eukles\Client\Exceptions\EuklesNamespaceException;
 use CatLab\Eukles\Client\Exceptions\EuklesServerException;
 use CatLab\Eukles\Client\Exceptions\InvalidModel;
 use CatLab\Eukles\Client\Interfaces\EuklesModel;
 use CatLab\Eukles\Client\Models\Event;
+use CatLab\Eukles\Client\Models\OptIn;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
@@ -203,12 +205,14 @@ class EuklesClient
     /**
      * @param $modelType
      * @param $modelUid
-     * @return mixed
+     * @param string $language
+     * @return OptInCollection
      * @throws EuklesServerException
      */
-    public function getOptIns($modelType, $modelUid)
+    public function getOptIns($modelType, $modelUid, $language = 'en')
     {
         $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
+
         $request = Request::create($url, 'GET');
         $request->headers->replace([
             'Content-Type' => 'application/json'
@@ -216,6 +220,46 @@ class EuklesClient
 
         $request->query = new ParameterBag([]);
         $request->query->set('environment', $this->environment);
+        $request->query->set('language', $language);
+
+        $this->sign($request);
+
+        try {
+            $result = $this->send($request);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+
+        $jsonContent = $result->getBody()->getContents();
+        $data = json_decode($jsonContent, true);
+
+        return OptInCollection::fromData($data);
+    }
+
+    /**
+     * @param $modelType
+     * @param $modelUid
+     * @param OptInCollection $optIns
+     * @param string $language
+     * @return OptInCollection
+     * @throws EuklesServerException
+     */
+    public function setOptIns($modelType, $modelUid, OptInCollection $optIns, $language = 'en')
+    {
+        $body = $optIns->toReplyData();
+
+        $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
+
+        $request = Request::create($url, 'POST');
+        $request->headers->replace([
+            'Content-Type' => 'application/json'
+        ]);
+
+        $request->input = new ParameterBag($body);
+
+        $request->query = new ParameterBag([]);
+        $request->query->set('environment', $this->environment);
+        $request->query->set('language', $language);
 
         $this->sign($request);
 
@@ -227,8 +271,8 @@ class EuklesClient
 
         $jsonContent = $result->getBody()->getContents();
 
-        echo $jsonContent;
-        return json_decode($jsonContent, true);
+        $data = json_decode($jsonContent, true);
+        return OptInCollection::fromData($data);
     }
 
     /**

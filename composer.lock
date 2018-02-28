@@ -4,8 +4,44 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#composer-lock-the-lock-file",
         "This file is @generated automatically"
     ],
-    "content-hash": "0e04a28e22f303ad16c7d605c561a12a",
+    "content-hash": "b9e98a2a4bc06ea5e7e21967c32c22f2",
     "packages": [
+        {
+            "name": "catlabinteractive/base",
+            "version": "v1.0.4",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/CatLabInteractive/base.git",
+                "reference": "d3a324aff13c4316bb6bbe744eb8088d77ede086"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/CatLabInteractive/base/zipball/d3a324aff13c4316bb6bbe744eb8088d77ede086",
+                "reference": "d3a324aff13c4316bb6bbe744eb8088d77ede086",
+                "shasum": ""
+            },
+            "require-dev": {
+                "phpunit/phpunit": "5.3.*"
+            },
+            "type": "library",
+            "autoload": {
+                "psr-4": {
+                    "CatLab\\Base\\": "src/CatLab/Base"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Thijs Van der Schaeghe",
+                    "email": "info@catlab.be"
+                }
+            ],
+            "description": "A few classes that you always need.",
+            "time": "2017-07-11T12:33:53+00:00"
+        },
         {
             "name": "guzzlehttp/guzzle",
             "version": "6.3.0",

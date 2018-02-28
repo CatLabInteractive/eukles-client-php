@@ -23,7 +23,8 @@
     "guzzlehttp/guzzle": ">=6.0",
     "php": "^7.0",
     "symfony/psr-http-message-bridge": "^1.0",
-    "zendframework/zend-diactoros": "^1.4"
+    "zendframework/zend-diactoros": "^1.4",
+    "catlabinteractive/base": "^1.0"
   },
   "require-dev": {
     "phpunit/phpunit": "*",
