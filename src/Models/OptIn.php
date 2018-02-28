@@ -2,7 +2,10 @@
 
 namespace CatLab\Eukles\Client\Models;
 
-
+/**
+ * Class OptIn
+ * @package CatLab\Eukles\Client\Models
+ */
 class OptIn
 {
     /**
@@ -11,12 +14,18 @@ class OptIn
      */
     public static function fromData($data)
     {
-        return new self(
+        $optin =  new self(
             $data['id'],
             $data['short'],
             $data['summary'],
             $data['required']
         );
+
+        if (isset($data['reply']) && isset($data['reply']['accepted'])) {
+            $optin->setAccepted($data['reply']['accepted']);
+        }
+
+        return $optin;
     }
 
     /**
