@@ -104,6 +104,11 @@ class EuklesClient
         }
         $this->httpClient = $httpClient;
 
+        // Make server safe
+        if (mb_substr($server, -1) === '/') {
+            $server = mb_substr($server, 0, -1);
+        }
+
         $this->server = $server;
         $this->consumerKey = $consumerKey;
         $this->consumerSecret = $consumerSecret;
@@ -356,7 +361,7 @@ class EuklesClient
     }
 
     /**
-     * @return false|string
+     * @return string
      */
     protected function getNonce()
     {
@@ -374,13 +379,21 @@ class EuklesClient
      */
     protected function getUrl($path, $server = null)
     {
-        $server = $server ?? $this->server;
+        if (isset($server)) {
+            // Make server safe
+            if (mb_substr($server, -1) === '/') {
+                $server = mb_substr($server, 0, -1);
+            }
+        } else {
+            $server = $this->server;
+        }
         return $server . '/api/v1/tracking/' . $path;
     }
 
     /**
      * @param Request $request
      * @return \Psr\Http\Message\ResponseInterface
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     protected function send(Request $request)
     {
