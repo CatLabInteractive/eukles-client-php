@@ -172,6 +172,7 @@ class EuklesClient
      * @throws EuklesServerException
      * @throws InvalidModel
      * @throws EuklesNamespaceException
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function trackEvent(Event $event)
     {
@@ -213,6 +214,7 @@ class EuklesClient
      * @param string $language
      * @return OptInCollection
      * @throws EuklesServerException
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function getOptIns($modelType, $modelUid, $language = 'en')
     {
@@ -248,6 +250,7 @@ class EuklesClient
      * @param string $language
      * @return OptInCollection
      * @throws EuklesServerException
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function setOptIns($modelType, $modelUid, OptInCollection $optIns, $language = 'en')
     {
@@ -289,6 +292,7 @@ class EuklesClient
      * @param $relationship
      * @param $targets
      * @throws \Exception
+     * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function syncRelationship($model, $relationship, $targets)
     {
@@ -303,8 +307,30 @@ class EuklesClient
             }
             $this->trackEvent($event);
         } catch (\Exception $e) {
-            $this->protectEuklesNamespace = $previousProtectState;
             throw $e;
+        } finally {
+            $this->protectEuklesNamespace = $previousProtectState;
+        }
+    }
+
+    /**
+     * Completely forget a model.
+     * @param $model
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    public function forgetModel($model)
+    {
+        $previousProtectState = $this->protectEuklesNamespace;
+        $this->protectEuklesNamespace = false;
+
+        try {
+            $event = self::createEvent('eukles.forget');
+            $event->setObject('source', $model);
+            $this->trackEvent($event);
+        } catch (\Exception $e) {
+            throw $e;
+        } finally {
+            $this->protectEuklesNamespace = $previousProtectState;
         }
     }
 
@@ -362,6 +388,7 @@ class EuklesClient
 
     /**
      * @return string
+     * @throws \Exception
      */
     protected function getNonce()
     {
