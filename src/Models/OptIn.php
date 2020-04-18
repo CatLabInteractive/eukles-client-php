@@ -2,6 +2,8 @@
 
 namespace CatLab\Eukles\Client\Models;
 
+use DateTime;
+
 /**
  * Class OptIn
  * @package CatLab\Eukles\Client\Models
@@ -23,6 +25,10 @@ class OptIn
 
         if (isset($data['reply']) && isset($data['reply']['accepted'])) {
             $optin->setAccepted($data['reply']['accepted']);
+        }
+
+        if (isset($data['reply']) && isset($data['reply']['date'])) {
+            $optin->setDate(new DateTime($data['reply']['date']));
         }
 
         return $optin;
@@ -52,6 +58,11 @@ class OptIn
      * @var bool
      */
     protected $accepted = false;
+
+    /**
+     * @var DateTime
+     */
+    protected $date;
 
     /**
      * OptIn constructor.
@@ -116,5 +127,23 @@ class OptIn
     {
         $this->accepted = $accepted;
         return $this;
+    }
+
+    /**
+     * @param DateTime $date
+     * @return $this
+     */
+    public function setDate(DateTime $date)
+    {
+        $this->date = $date;
+        return $this;
+    }
+
+    /**
+     * @return DateTime
+     */
+    public function getDate()
+    {
+        return $this->date;
     }
 }
