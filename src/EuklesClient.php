@@ -212,11 +212,12 @@ class EuklesClient
      * @param $modelType
      * @param $modelUid
      * @param string $language
+     * @param null $context
      * @return OptInCollection
      * @throws EuklesServerException
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
-    public function getOptIns($modelType, $modelUid, $language = 'en')
+    public function getOptIns($modelType, $modelUid, $language = 'en', $context = null)
     {
         $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
 
@@ -228,6 +229,9 @@ class EuklesClient
         $request->query = new ParameterBag([]);
         $request->query->set('environment', $this->environment);
         $request->query->set('language', $language);
+        if ($context) {
+            $request->query->set('context', $context);
+        }
 
         $this->sign($request);
 
