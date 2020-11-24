@@ -12,6 +12,7 @@ use CatLab\Eukles\Client\Exceptions\InvalidModel;
 use CatLab\Eukles\Client\Interfaces\EuklesModel;
 use CatLab\Eukles\Client\Models\Event;
 use CatLab\Eukles\Client\Models\OptIn;
+use CatLab\Eukles\Client\Models\Responses\TrackEventResponse;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
@@ -193,6 +194,11 @@ class EuklesClient
 
         try {
             $result = $this->send($request);
+
+            $jsonContent = $result->getBody()->getContents();
+            $data = json_decode($jsonContent, true);
+
+            return TrackEventResponse::fromData($data);
         } catch (RequestException $e) {
             throw EuklesServerException::make($e);
         }
