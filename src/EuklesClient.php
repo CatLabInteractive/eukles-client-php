@@ -197,6 +197,9 @@ class EuklesClient
 
             $jsonContent = $result->getBody()->getContents();
             $data = json_decode($jsonContent, true);
+            if (!$data) {
+                throw new EuklesServerException('Could not decode Eukles response: ' . $jsonContent);
+            }
 
             return TrackEventResponse::fromData($data);
         } catch (RequestException $e) {
