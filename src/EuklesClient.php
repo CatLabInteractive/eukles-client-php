@@ -170,9 +170,10 @@ class EuklesClient
 
     /**
      * @param Event $event
+     * @return TrackEventResponse
+     * @throws EuklesNamespaceException
      * @throws EuklesServerException
      * @throws InvalidModel
-     * @throws EuklesNamespaceException
      * @throws \GuzzleHttp\Exception\GuzzleException
      */
     public function trackEvent(Event $event)
@@ -205,6 +206,14 @@ class EuklesClient
         } catch (RequestException $e) {
             throw EuklesServerException::make($e);
         }
+    }
+
+    /**
+     * Event[] $events
+     */
+    public function trackEvents(array $events)
+    {
+
     }
 
     /**
