@@ -2,9 +2,6 @@
 
 namespace CatLab\Eukles\Client;
 
-use CatLab\CentralStorage\Client\Exceptions\StorageServerException;
-use CatLab\CentralStorage\Client\Interfaces\CentralStorageClient as CentralStorageClientInterface;
-use CatLab\CentralStorage\Client\Models\Asset;
 use CatLab\Eukles\Client\Collections\OptInCollection;
 use CatLab\Eukles\Client\Exceptions\EuklesNamespaceException;
 use CatLab\Eukles\Client\Exceptions\EuklesServerException;
@@ -13,6 +10,7 @@ use CatLab\Eukles\Client\Interfaces\EuklesModel;
 use CatLab\Eukles\Client\Models\Event;
 use CatLab\Eukles\Client\Models\OptIn;
 use CatLab\Eukles\Client\Models\Responses\TrackEventResponse;
+use CatLab\Eukles\Client\Tools\StringHelper;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
@@ -373,7 +371,7 @@ class EuklesClient
 
         // Add some salt
         if (!isset($salt)) {
-            $salt = str_random(16);
+            $salt = StringHelper::random(16);
         }
 
         $inputs['salt'] = $salt;
