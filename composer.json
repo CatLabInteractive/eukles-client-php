@@ -21,7 +21,6 @@
   },
   "require": {
     "guzzlehttp/guzzle": ">=6.0",
-    "symfony/psr-http-message-bridge": "^1.0",
     "catlabinteractive/base": "^1.0",
     "ext-json": "*"
   },
