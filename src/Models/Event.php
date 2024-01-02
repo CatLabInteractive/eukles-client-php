@@ -109,6 +109,8 @@ class Event
             // check what kind of array this is
             if (is_object($object) || is_array($object) && isset($object['type'])) {
                 $translatedObjects[] = $this->translateObject($role, $object);
+            } elseif (is_scalar($object)) {
+                $translatedObjects[] = $this->translateScalar($role, $object);
             } else {
                 // need to go deeper.
                 foreach ($object as $v) {
@@ -124,6 +126,22 @@ class Event
             ],
             'actions' => [
                 'items' => $this->actions
+            ]
+        ];
+    }
+
+    /**
+     * @param $role
+     * @param $object
+     * @return array
+     */
+    protected function translateScalar($role, $object)
+    {
+        return [
+            'role' => $role,
+            'type' => 'scalar',
+            'attributes' => [
+                'value' => $object
             ]
         ];
     }
