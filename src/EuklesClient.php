@@ -6,24 +6,19 @@ use CatLab\Eukles\Client\Collections\OptInCollection;
 use CatLab\Eukles\Client\Exceptions\EuklesNamespaceException;
 use CatLab\Eukles\Client\Exceptions\EuklesServerException;
 use CatLab\Eukles\Client\Exceptions\InvalidModel;
-use CatLab\Eukles\Client\Interfaces\EuklesModel;
+use CatLab\Eukles\Client\Interfaces\EuklesClient as EuklesClientInterface;
 use CatLab\Eukles\Client\Models\Event;
-use CatLab\Eukles\Client\Models\OptIn;
 use CatLab\Eukles\Client\Models\Responses\TrackEventResponse;
 use CatLab\Eukles\Client\Tools\StringHelper;
 use GuzzleHttp\Client as GuzzleClient;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\RequestException;
-use Illuminate\Http\Request;
-use Illuminate\Http\UploadedFile;
-use Symfony\Component\HttpFoundation\File\File;
-use Symfony\Component\HttpFoundation\ParameterBag;
 
 /**
  * Class EuklesClient
  * @package CatLab\Eukles\Client
  */
-class EuklesClient
+class EuklesClient implements EuklesClientInterface
 {
     const QUERY_NONCE       = 'nonce';
 
@@ -69,22 +64,7 @@ class EuklesClient
     private $protectEuklesNamespace = true;
 
     /**
-     * @return self
-     */
-    public static function fromConfig()
-    {
-        $client = new self(
-            \Config::get('eukles.server'),
-            \Config::get('eukles.key'),
-            \Config::get('eukles.secret'),
-            \Config::get('eukles.environment')
-        );
-
-        return $client;
-    }
-
-    /**
-     * CentralStorageClient constructor.
+     * EuklesClient constructor.
      * @param null $server
      * @param null $consumerKey
      * @param null $consumerSecret
@@ -96,7 +76,7 @@ class EuklesClient
         $consumerKey = null,
         $consumerSecret = null,
         $environment = null,
-        ClientInterface $httpClient = null
+        ?ClientInterface $httpClient = null
     ) {
         if (!isset($httpClient)) {
             $httpClient = new GuzzleClient();
@@ -104,7 +84,7 @@ class EuklesClient
         $this->httpClient = $httpClient;
 
         // Make server safe
-        if (mb_substr($server, -1) === '/') {
+        if (mb_substr((string) $server, -1) === '/') {
             $server = mb_substr($server, 0, -1);
         }
 
@@ -115,55 +95,45 @@ class EuklesClient
     }
 
     /**
-     * Sign a request.
-     * @param Request $request
-     * @param $key
-     * @param $secret
-     * @return void
+     * Sign a set of parameters.
+     * @param array $parameters
+     * @param string|null $secret
+     * @return string
      */
-    public function sign(Request $request, $key = null, $secret = null)
+    public function signParameters(array $parameters, $secret = null)
     {
-        $key = $key ?? $this->consumerKey;
         $secret = $secret ?? $this->consumerSecret;
 
-        // Add a nonce that we won't check but we add it anyway.
-        $request->query->set(self::QUERY_NONCE, $this->getNonce());
-
-        $signature = $this->getSignature($request, $this->algorithm, $secret);
-
-        $request->headers->set(self::HEADER_SIGNATURE, $signature);
-        $request->headers->set(self::HEADER_KEY, $key);
+        return $this->getSignature($parameters, $this->algorithm, $secret);
     }
 
     /**
-     * Check if a request is valid.
-     * @param Request $request
-     * @param $key
+     * Check if a signature is valid for the given parameters.
+     * @param array $parameters
+     * @param $providedSignature
      * @param $secret
      * @return bool
      */
-    public function isValid(Request $request, $key, $secret)
+    public function isValidParameters(array $parameters, $providedSignature, $secret)
     {
-        $fullSignature = $request->headers->get(self::HEADER_SIGNATURE);
-        if (!$fullSignature) {
+        if (!$providedSignature) {
             return false;
         }
 
-        $signatureParts = explode(':', $fullSignature);
+        $signatureParts = explode(':', $providedSignature);
         if (count($signatureParts) != 3) {
             return false;
         }
 
         $algorithm = array_shift($signatureParts);
         $salt = array_shift($signatureParts);
-        $signature = array_shift($signatureParts);
 
-        $actualSignature = $this->getSignature($request, $algorithm, $secret, $salt);
+        $actualSignature = $this->getSignature($parameters, $algorithm, $secret, $salt);
         if (!$actualSignature) {
             return false;
         }
 
-        return $fullSignature === $actualSignature;
+        return $providedSignature === $actualSignature;
     }
 
     /**
@@ -178,21 +148,13 @@ class EuklesClient
     {
         $this->checkValidNamespace($event);
 
-        $data = $event->getData();
+        $body = $event->getData();
+        $body['environment'] = $this->environment;
 
         $url = $this->getUrl('events.json');
-        $request = Request::create($url, 'POST');
-        $request->headers->replace([
-            'Content-Type' => 'application/json'
-        ]);
-
-        $request->input = new ParameterBag($data);
-        $request->input->set('environment', $this->environment);
-
-        $this->sign($request);
 
         try {
-            $result = $this->send($request);
+            $result = $this->send('POST', $url, [], $body);
 
             $jsonContent = $result->getBody()->getContents();
             $data = json_decode($jsonContent, true);
@@ -208,10 +170,12 @@ class EuklesClient
 
     /**
      * Event[] $events
+     * @param Event[] $events
+     * @return void
      */
     public function trackEvents(array $events)
     {
-
+        // 1.x compatibility: trackEvents() was never implemented upstream (no-op).
     }
 
     /**
@@ -237,22 +201,17 @@ class EuklesClient
     {
         $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
 
-        $request = Request::create($url, 'GET');
-        $request->headers->replace([
-            'Content-Type' => 'application/json'
-        ]);
+        $query = [
+            'environment' => $this->environment,
+            'language' => $language
+        ];
 
-        $request->query = new ParameterBag([]);
-        $request->query->set('environment', $this->environment);
-        $request->query->set('language', $language);
         if ($context) {
-            $request->query->set('context', $context);
+            $query['context'] = $context;
         }
 
-        $this->sign($request);
-
         try {
-            $result = $this->send($request);
+            $result = $this->send('GET', $url, $query);
         } catch (RequestException $e) {
             throw EuklesServerException::make($e);
         }
@@ -278,21 +237,13 @@ class EuklesClient
 
         $url = $this->getUrl('models/' . $modelType . '/' . $modelUid  . '/optins.json');
 
-        $request = Request::create($url, 'POST');
-        $request->headers->replace([
-            'Content-Type' => 'application/json'
-        ]);
-
-        $request->input = new ParameterBag($body);
-
-        $request->query = new ParameterBag([]);
-        $request->query->set('environment', $this->environment);
-        $request->query->set('language', $language);
-
-        $this->sign($request);
+        $query = [
+            'environment' => $this->environment,
+            'language' => $language
+        ];
 
         try {
-            $result = $this->send($request);
+            $result = $this->send('POST', $url, $query, $body);
         } catch (RequestException $e) {
             throw EuklesServerException::make($e);
         }
@@ -355,38 +306,71 @@ class EuklesClient
     }
 
     /**
-     * @param Request $request
+     * Sign and send a request to the Eukles server.
+     *
+     * Only the query parameters (plus a generated nonce) are signed - this mirrors 1.x, which
+     * signed $request->query() only and never included the JSON body in the signature.
+     * @param string $method
+     * @param string $url
+     * @param array $query
+     * @param array|null $jsonBody
+     * @return \Psr\Http\Message\ResponseInterface
+     * @throws \GuzzleHttp\Exception\GuzzleException
+     */
+    protected function send(string $method, string $url, array $query = [], ?array $jsonBody = null)
+    {
+        $query[self::QUERY_NONCE] = $this->getNonce();
+
+        $signature = $this->getSignature($query, $this->algorithm, $this->consumerSecret);
+
+        $options = [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                self::HEADER_SIGNATURE => $signature,
+                self::HEADER_KEY => $this->consumerKey
+            ],
+            'query' => $query
+        ];
+
+        if ($jsonBody !== null) {
+            $options['json'] = $jsonBody;
+        }
+
+        return $this->httpClient->request($method, $url, $options);
+    }
+
+    /**
+     * Same as getSignature, but doesn't require a request.
+     * @param array $parameters
      * @param $algorithm
      * @param $secret
      * @param null $salt
-     * @return string
+     * @return string|false
      */
-    protected function getSignature(Request $request, $algorithm, $secret, $salt = null)
+    protected function getSignature(array $parameters, $algorithm, $secret, $salt = null)
     {
         if (!$this->isValidAlgorithm($algorithm)) {
             return false;
         }
-
-        $inputs = $request->query();
 
         // Add some salt
         if (!isset($salt)) {
             $salt = StringHelper::random(16);
         }
 
-        $inputs['salt'] = $salt;
-        $inputs['secret'] = $secret;
+        $parameters['salt'] = $salt;
+        $parameters['secret'] = $secret;
 
         // Sort on key
-        ksort($inputs);
+        ksort($parameters);
 
         // Turn into a string
-        $base = http_build_query($inputs);
+        $base = http_build_query($parameters);
 
         // And... hash!
         $signature = hash($algorithm, $base);
 
-        return $algorithm . ':' . $inputs['salt'] . ':' . $signature;
+        return $algorithm . ':' . $parameters['salt'] . ':' . $signature;
     }
 
     /**
@@ -408,13 +392,12 @@ class EuklesClient
 
     /**
      * @return string
-     * @throws \Exception
      */
     protected function getNonce()
     {
         $t = microtime(true);
         $micro = sprintf("%06d",($t - floor($t)) * 1000000);
-        $d = new \DateTime( date('Y-m-d H:i:s.'.$micro, $t) );
+        $d = new \DateTime( date('Y-m-d H:i:s.'.$micro, (int) floor($t)) );
 
         return $d->format("Y-m-d H:i:s.u");
     }
@@ -435,64 +418,6 @@ class EuklesClient
             $server = $this->server;
         }
         return $server . '/api/v1/tracking/' . $path;
-    }
-
-    /**
-     * @param Request $request
-     * @return \Psr\Http\Message\ResponseInterface
-     * @throws \GuzzleHttp\Exception\GuzzleException
-     */
-    protected function send(Request $request)
-    {
-        $method = $request->getMethod();
-        $url = $request->getUri();
-
-        $options = [
-            'headers' => $request->headers->all(),
-            'query' => $request->query->all()
-        ];
-
-        if ($request->files->count() > 0) {
-
-            $elements = [];
-            foreach ($request->input() as $k => $v) {
-                if (is_scalar($v)) {
-                    $elements[] = [
-                        'name' => $k,
-                        'contents' => $v
-                    ];
-                }
-            }
-
-            $counter = 0;
-            foreach ($request->files as $file) {
-
-                /** @var UploadedFile $file */
-                $filename = addslashes($file->getClientOriginalName());
-
-                if (empty($filename)) {
-                    $filename = $file->getFilename();
-                }
-
-                $elements[] = [
-                    'name' => 'file_' . (++ $counter),
-                    'contents' => fopen($file->path(), 'r'),
-                    'filename' => $file->path(),
-                    'headers' => [
-                        'Content-Disposition' => 'form-data; name="file_' . (++ $counter) . '"; filename="' . $filename . '"'
-                    ]
-                ];
-            }
-
-            $options['multipart'] = $elements;
-        } elseif ($request->input) {
-            $options['json'] = $request->input->all();
-        }
-
-        //dd($psr7Request)
-        $response = $this->httpClient->request($method, $url, $options);
-
-        return $response;
     }
 
     /**

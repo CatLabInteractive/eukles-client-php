@@ -20,17 +20,12 @@
     }
   },
   "require": {
-    "guzzlehttp/guzzle": ">=6.0",
+    "php": ">=8.1",
     "catlabinteractive/base": "^1.0",
-    "ext-json": "*"
+    "ext-json": "*",
+    "guzzlehttp/guzzle": "^6.3|^7.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "*",
-    "laravel/framework": "5.4.*"
-  },
-  "config": {
-    "allow-plugins": {
-      "kylekatarnls/update-helper": true
-    }
+    "phpunit/phpunit": "^9.6"
   }
 }

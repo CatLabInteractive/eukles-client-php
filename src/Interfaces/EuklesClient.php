@@ -2,29 +2,26 @@
 
 namespace CatLab\Eukles\Client\Interfaces;
 
-use Illuminate\Http\Request;
-
 /**
- * Interface CentralStorageClient
- * @package CatLab\CentralStorage\Client\Interfaces
+ * Interface EuklesClient
+ * @package CatLab\Eukles\Client\Interfaces
  */
 interface EuklesClient
 {
     /**
-     * Sign a request.
-     * @param Request $response
-     * @param $key
-     * @param $secret
-     * @return void
+     * Sign a set of parameters.
+     * @param array $parameters
+     * @param string|null $secret
+     * @return string
      */
-    public function sign(Request $response, $key, $secret);
+    public function signParameters(array $parameters, $secret = null);
 
     /**
-     * Check if a request is valid.
-     * @param Request $request
-     * @param $key
-     * @param $secret
+     * Check if a signature is valid for the given parameters.
+     * @param array $parameters
+     * @param string $providedSignature
+     * @param string $secret
      * @return bool
      */
-    public function isValid(Request $request, $key, $secret);
+    public function isValidParameters(array $parameters, $providedSignature, $secret);
 }
