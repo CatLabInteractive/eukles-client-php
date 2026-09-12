@@ -223,6 +223,34 @@ class EuklesClient implements EuklesClientInterface
     }
 
     /**
+     * The opt-in campaigns of a model type, without a model: no reply data,
+     * texts in $language. Use it to render consent checkboxes for someone
+     * who is not tracked yet.
+     */
+    public function listOptIns(string $modelType, string $language = 'en', ?string $context = null): OptInCollection
+    {
+        $url = $this->getUrl('models/' . $modelType . '/optins.json');
+
+        $query = [
+            'environment' => $this->environment,
+            'language' => $language
+        ];
+        if ($context) {
+            $query['context'] = $context;
+        }
+
+        try {
+            $result = $this->send('GET', $url, $query);
+        } catch (RequestException $e) {
+            throw EuklesServerException::make($e);
+        }
+
+        $data = json_decode($result->getBody()->getContents(), true);
+
+        return OptInCollection::fromData($data);
+    }
+
+    /**
      * @param $modelType
      * @param $modelUid
      * @param OptInCollection $optIns
