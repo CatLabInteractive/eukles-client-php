@@ -276,7 +276,7 @@ class EuklesClient
      */
     public function listOptIns($modelType, $language = 'en', $context = null)
     {
-        $url = $this->getUrl('models/' . $modelType . '/optins.json');
+        $url = $this->getUrl('model-types/' . $modelType . '/optins.json');
 
         $request = Request::create($url, 'GET');
         $request->headers->replace([
