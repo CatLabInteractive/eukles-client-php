@@ -16,13 +16,15 @@ class ListOptInsRequestTest extends TestCase
     public function testRequestsTheTypeRouteAndParsesTheItems()
     {
         $history = [];
+        $responseBody = json_encode([
+            'items' => [
+                ['id' => 12, 'short' => 'Newsletter', 'summary' => 'Monthly', 'required' => false],
+                ['id' => 15, 'short' => 'Terms', 'summary' => '', 'required' => true],
+            ],
+        ]);
         $mock = new MockHandler([
-            new Response(200, ['Content-Type' => 'application/json'], json_encode([
-                'items' => [
-                    ['id' => 12, 'short' => 'Newsletter', 'summary' => 'Monthly', 'required' => false],
-                    ['id' => 15, 'short' => 'Terms', 'summary' => '', 'required' => true],
-                ],
-            ])),
+            new Response(200, ['Content-Type' => 'application/json'], $responseBody),
+            new Response(200, ['Content-Type' => 'application/json'], $responseBody),
         ]);
         $stack = HandlerStack::create($mock);
         $stack->push(Middleware::history($history));
@@ -48,6 +50,14 @@ class ListOptInsRequestTest extends TestCase
         parse_str($request->getUri()->getQuery(), $query);
         $this->assertSame('testing', $query['environment']);
         $this->assertSame('nl', $query['language']);
+        $this->assertArrayNotHasKey('context', $query);
         $this->assertNotEmpty($request->getHeaderLine(EuklesClient::HEADER_SIGNATURE));
+
+        // A context argument is sent as the `context` query parameter.
+        $client->listOptIns('user', 'nl', 'signup');
+
+        $secondRequest = $history[1]['request'];
+        parse_str($secondRequest->getUri()->getQuery(), $secondQuery);
+        $this->assertSame('signup', $secondQuery['context']);
     }
 }
