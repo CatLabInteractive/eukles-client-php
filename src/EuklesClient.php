@@ -233,7 +233,7 @@ class EuklesClient implements EuklesClientInterface
     {
         $language = $language ?: 'en';
 
-        $url = $this->getUrl('models/' . $modelType . '/optins.json');
+        $url = $this->getUrl('model-types/' . $modelType . '/optins.json');
 
         $query = [
             'environment' => $this->environment,

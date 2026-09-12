@@ -46,7 +46,7 @@ class ListOptInsRequestTest extends TestCase
 
         $request = $history[0]['request'];
         $this->assertSame('GET', $request->getMethod());
-        $this->assertSame('/api/v1/tracking/models/user/optins.json', $request->getUri()->getPath());
+        $this->assertSame('/api/v1/tracking/model-types/user/optins.json', $request->getUri()->getPath());
         parse_str($request->getUri()->getQuery(), $query);
         $this->assertSame('testing', $query['environment']);
         $this->assertSame('nl', $query['language']);
